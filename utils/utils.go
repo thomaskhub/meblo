@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // define ffmpef error codes to access it globaly
@@ -64,4 +65,22 @@ func GetCurrentWorkingDir() (string, error) {
 		return "", err
 	}
 	return filepath.Clean(dir), nil
+}
+
+// GetOutputFormat get the output format based on the outStr provided
+// if outStr is an rtmpUrl return flv, if it is an dash url return dash, if it is a file return mpegts
+func GetOutputFormat(path string) string {
+	// check if the outString is an rtmp url if so set outFormat to OutputModeRtmp
+	if strings.HasPrefix(path, "rtmp://") {
+		return OutputModeRtmp
+	}
+	if strings.HasSuffix(path, ".mpd") {
+		return OutputModeDash
+	}
+
+	if strings.HasSuffix(path, ".ts") {
+		return OutputModeMpegts
+	}
+
+	return ""
 }

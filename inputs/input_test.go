@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/thomaskhub/meblo/logger"
 	"github.com/thomaskhub/meblo/utils"
 	"go.uber.org/zap"
@@ -17,43 +18,44 @@ func TestFileInput(t *testing.T) {
 	wd, _ := utils.GetCurrentWorkingDir()
 	absPath := utils.ConvertToAbsolutePath("../assets/test/test.mp4", wd)
 
-	fileInput := FileInput{}
-	err := fileInput.Open(absPath)
+	fileInput := Input{}
+	err := fileInput.Open(absPath, true)
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
+	videoSum := 0.0
 	go func() {
-		sum := 0.0
 		for {
 			packet := <-fileInput.videoOut
+
 			if packet != nil {
-				sum += float64(int(packet.duration)) / float64(fileInput.videoTimescale.Den)
-				logger.Debug("VideoPacket", zap.Float64("durationSum", sum))
+				videoSum += float64(int(packet.GetDuration())) / float64(fileInput.videoTimescale.Den)
+				logger.Debug("VideoPacket", zap.Float64("durationSum", videoSum))
 			}
 
-			FreePacket(packet)
+			packet.AVPacketFree()
 		}
 
 	}()
 
+	audioSum := 0.0
 	go func() {
-		sum := 0.0
 		for {
 			packet := <-fileInput.audioOut
 			if packet != nil {
-				sum += float64(int(packet.duration)) / float64(fileInput.audioTimescale.Den)
-				logger.Debug("AudioPacket", zap.Float64("durationSum", sum))
+				audioSum += float64(int(packet.GetDuration())) / float64(fileInput.audioTimescale.Den)
+				logger.Debug("AudioPacket", zap.Float64("durationSum", audioSum))
 			}
 
-			FreePacket(packet)
-
+			packet.AVPacketFree()
 		}
 
 	}()
 
 	time.Sleep(time.Second * 10)
+	assert.Greater(t, videoSum, 220.0)
+	assert.Greater(t, audioSum, 220.0)
 	logger.Logger.Sync()
-	fileInput.Close()
 }

@@ -9,6 +9,12 @@ streaming servers example are:
 - DASH / HLS media streaming
 - Creation of VODs with DRM technologies
 
+## Status
+
+- [x] Input first version implemented and tested
+- [ ] Output partially implemented needs to be completed and tested
+  - only write the header right now but is not writing the packets to the output file yet
+
 ## meblo elements
 
 ![Medie pip](./doc/img/pipe.png)
@@ -43,13 +49,12 @@ convert it into the respectice output path. Outputs will
 not have any channels as output as the data is directly saved
 on disk or send over some network protocol
 
-### Inputs
+### Input
 
-Inputs elemets can be used to read video data from different types of sources.
-All inputs elements must follow the following interface
+Input elemet can be used to read video data from different types of sources.
 
 ```golang
-type {InputName}Input struct {
+type  Input struct {
 	base           BaseInput        //the base input
 	videoOut       chan *C.AVPacket //video data
 	audioOut       chan *C.AVPacket //audio data
@@ -57,37 +62,32 @@ type {InputName}Input struct {
 	videoTimescale utils.Timescale  //define the video timescale
 }
 
-func (in *{InputName}) Open() {} //open the input and start processing
-func (in *{InputName}) Close() {} //stop the input and free all resources
-func (in *{InputName}) GetStata() {} //return the internl statistics of the module
+func (in *Input) Open() {} //open the input and start processing
+func (in *Input) Close() {} //stop the input and free all resources
+func (in *Input) Restart(inStr string) {} //restart input from the beginning (needed for RTMP restart after connection break) use original in string when inStr is set to "" otherwise use the provided string
+func (in *Input) GetStats() {} //return the internl statistics of the module
+
+//Example: read a video from a file
+fileInput := Input{}
+err := fileInput.Open("/home/user/Videos/test.mp4")
+
+//Example: read video from an rtmp server (rtmp pull)
+// - reading the video and audio data and restart the rtmp
+//   when connection closes
+rtmpInput := Input {}
+autoRetry := true;
+err := rtmpPullInput.Open("rtmp://localhost:1935/live/input", autoRetry)
+
+go func(){
+    for {
+        for {
+			packet := <-fileInput.videoOut
+            // Do something with the packet here
+
+            //free the packet memory
+            FreePacket(packet)
+        }
+    }
+}()
+
 ```
-
-#### FileInput
-
-Used to read video data from a file and output the data as \*AVPAckets.
-The output buffers of this module are set to 16 elements in size. The path
-of the file passed to the open function must be an absolute path.
-
-```golang
-fileInput := FileInput{}
-err := fileInput.Open(absPath)
-
-// use fileInput.videoOut and fileInput.audioOut to connect the input to the next pipe element
-
-switch errorCode {
-case utils.FFmpegErrorEinval:
-    // handle internal error, some memory could not be allocated
-case utils.FFmpegErrorEof:
-    // handle the file has ended so we can close the input module
-    fileInput.Close()
-default:
-    // handle other cases
-}
-```
-
-#### RtmpPull Input (TODO)
-
-- create an RTMP input module
-- have an option in the open function that will allow to enable / disable retry
-  - we should retry when connection is interrupted for what ever reason
-  - reconnect to rtmp whenever
