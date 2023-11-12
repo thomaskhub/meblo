@@ -1,13 +1,5 @@
 package inputs
 
-//#cgo CFLAGS: -I/usr/include/x86_64-linux-gnu
-//#cgo LDFLAGS: -lavformat -lavcodec -lavutil
-//#include <libavformat/avformat.h>
-//#include <libavcodec/avcodec.h>
-// #include <libavutil/frame.h>
-// #include <libavutil/log.h>
-// #include <libavutil/samplefmt.h>
-// #include <errno.h>
 import "C"
 import (
 	"time"
@@ -115,7 +107,6 @@ func (file *Input) Open(inStr string, autoRetry bool) error {
 				}
 				return
 			} else {
-				logger.Debug("test", zap.Int("ret", err))
 				continue
 			}
 
@@ -138,21 +129,19 @@ func (file *Input) readPacket() int {
 	packet := ffmpeg.AVPacket{}
 	packet.AVPacketAllocate()
 
-	// packet := C.av_packet_alloc()
 	ret := file.base.ctx.AVReadFrame(&packet)
-	// ret := C.av_read_frame(formatContext, packet)
-
 	if ret < 0 {
-		// C.av_packet_free(&packet)
 		packet.AVPacketFree()
 		return int(ret)
 	}
 
 	if packet.GetStreamIndex() == file.base.videoStreams[0].GetStreamIndex() {
+		packet.SetTimebase(file.base.videoStreams[0].GetTimebase())
 		file.videoOut <- &packet
 		logger.Debug("FileInput", zap.String("VideoPacket", "written"))
 
 	} else if packet.GetStreamIndex() == file.base.audioStreams[0].GetStreamIndex() {
+		packet.SetTimebase(file.base.audioStreams[0].GetTimebase())
 		file.audioOut <- &packet
 		logger.Debug("FileInput", zap.String("AudioPacket", "written"))
 	}
