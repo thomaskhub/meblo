@@ -91,3 +91,19 @@ go func(){
 }()
 
 ```
+
+## Test
+
+To test you can start docker container with:
+```sh
+docker compose up sleep
+```
+And go into it with:
+```sh
+docker exec -it meblo-sleep bash
+```
+
+You can run test by going into the folders with `*_test.go` files and running:
+```sh
+go test
+```
