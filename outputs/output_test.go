@@ -25,10 +25,6 @@ func TestOutputBase(t *testing.T) {
 	output.ConfigAudio(fileInput.GetAudioOut(), fileInput.GetAudioCodecParams())
 	output.Open("/tmp/test.mp4")
 
-	// audioParams := fileInput.GetAudioCodecParams()
-	// a := fileInput.GetAudioOut()
-	// output.ConfigAudio(a, audioParams)
-
 	time.Sleep(time.Second * 10)
 
 }

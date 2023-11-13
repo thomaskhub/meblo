@@ -1,21 +1,34 @@
 package ffmpeg
 
-//#cgo CFLAGS: -I/usr/include/x86_64-linux-gnu
-//#cgo LDFLAGS: -lavformat -lavcodec -lavutil
+//#cgo pkg-config: libavformat libavfilter libavutil libavcodec
 //#include <libavformat/avformat.h>
-// #include <errno.h>
+//#include <errno.h>
+//#include "inputs/inputs.h"
+//
+//static AVStream *getStream(AVFormatContext *ctx, int index) {
+//	return ctx->streams[index];
+//}
 import "C"
 import (
-	"log"
+	"fmt"
 	"unsafe"
 
 	"github.com/thomaskhub/meblo/logger"
 	"go.uber.org/zap"
 )
 
+const (
+	AVMEDIA_TYPE_VIDEO int = C.AVMEDIA_TYPE_VIDEO
+	AVMEDIA_TYPE_AUDIO int = C.AVMEDIA_TYPE_AUDIO
+)
+
 // AVFormatContext represents an input or output format context.
 type AVFormatContext struct {
 	CAVFormatContext *C.AVFormatContext
+}
+
+func (ctx *AVFormatContext) Version() {
+	fmt.Println(int(C.LIBAVFORMAT_VERSION_MAJOR), int(C.LIBAVFORMAT_VERSION_MINOR), int(C.LIBAVFORMAT_VERSION_MICRO))
 }
 
 // GetNumberOfStreams returns the number of streams in the AVFormatContext.
@@ -30,41 +43,55 @@ func (ctx *AVFormatContext) GetNumberOfStreams() int {
 //
 // It does not take any parameters.
 // It returns a slice of pointers to AVStream.
-func (ctx *AVFormatContext) GetStreams() []*AVStream {
-	streams := make([]*AVStream, ctx.GetNumberOfStreams())
-	numberOfStreams := ctx.GetNumberOfStreams()
-	cStrams := (*C.AVStream)(unsafe.Pointer(ctx.CAVFormatContext.streams))
+// func (ctx *AVFormatContext) GetStreams() []*AVStream {
+// 	streams := make([]*AVStream, ctx.GetNumberOfStreams())
+// 	numberOfStreams := ctx.GetNumberOfStreams()
+// 	cStrams := (*C.AVStream)(unsafe.Pointer(ctx.CAVFormatContext.streams))
 
-	for i := 0; i < numberOfStreams; i++ {
+// 	for i := 0; i < numberOfStreams; i++ {
 
-		arrayOfPointers := (*[1 << 30]*C.AVStream)(unsafe.Pointer(cStrams))[:numberOfStreams:numberOfStreams]
-		stream := arrayOfPointers[i]
-		streams[i] = &AVStream{CAVStream: stream}
-	}
+// 		arrayOfPointers := (*[1 << 30]*C.AVStream)(unsafe.Pointer(cStrams))[:numberOfStreams:numberOfStreams]
+// 		stream := arrayOfPointers[i]
+// 		streams[i] = &AVStream{CAVStream: stream}
+// 	}
 
-	return streams
+// 	return streams
+// }
+
+func (ctx *AVFormatContext) GetStream(index int) *AVStream {
+	cStream := C.getStream(ctx.CAVFormatContext, C.int(index))
+	return &AVStream{CAVStream: (*C.AVStream)(unsafe.Pointer(cStream))}
+	return nil
 }
 
 // AVFormatAllocContext allocates an AVFormatContext struct.
 //
 // It returns a pointer to the allocated AVFormatContext struct.
 func (ctx *AVFormatContext) AVFormatAllocContext() {
-	ctx.CAVFormatContext = C.avformat_alloc_context()
+	cCtx := C.avformat_alloc_context()
+	ctx = &AVFormatContext{CAVFormatContext: (*C.AVFormatContext)(unsafe.Pointer(cCtx))}
 }
 
+// AVFormatAllocOutputContext2 allocates an AVFormatContext for an output format.
 func (ctx *AVFormatContext) AVFormatAllocOutputContext2(url string) int {
 	//call the avformat_alloc_output_context2
 	urlCsting := C.CString(url)
 	defer C.free(unsafe.Pointer(urlCsting))
 
 	// formatCstr := C.CString(utils.GetOutputFormat(url))
-	// defer C.free(unsafe.Pointer(formatCstr))
+	formatCstr := C.CString("mpegts") //TODO: this must be set based on the opoutut
+	defer C.free(unsafe.Pointer(formatCstr))
 
-	return int(C.avformat_alloc_output_context2(&ctx.CAVFormatContext, nil, nil, urlCsting))
+	var cCtx *C.AVFormatContext
+	ret := int(C.avformat_alloc_output_context2(&cCtx, nil, formatCstr, urlCsting))
+	ctx.CAVFormatContext = (*C.AVFormatContext)(unsafe.Pointer(cCtx))
+	return ret
 }
 
+// AVFormatNewStream creates a new stream for the AVFormatContext.
 func (ctx *AVFormatContext) AVFormatNewStream() *AVStream {
-	return &AVStream{CAVStream: C.avformat_new_stream(ctx.CAVFormatContext, nil)}
+	unsafePointer := unsafe.Pointer(C.avformat_new_stream(ctx.CAVFormatContext, nil))
+	return &AVStream{CAVStream: (*C.AVStream)(unsafePointer)}
 }
 
 // AVFormatOpenInput opens an input stream and initializes the format context.
@@ -135,9 +162,25 @@ func (ctx *AVFormatContext) CheckIfNoFile(outStr string) {
 }
 
 func (ctx *AVFormatContext) AVFormatWriteHeader() int {
-	if ctx == nil || ctx.CAVFormatContext == nil {
-		log.Println("-------------------- Pointer is nill")
-
-	}
 	return int(C.avformat_write_header(ctx.CAVFormatContext, nil))
+}
+
+// fucntion to call av_interleaved_write_frame
+// CallAVInterleavedWriteFrame is a function to call av_interleaved_write_frame.
+//
+// Parameters:
+//
+//	ctx - The AVFormatContext object.
+//	packet - The AVPacket object to be written.
+//
+// Returns:
+//
+//	int - The return value of av_interleaved_write_frame.
+func (ctx *AVFormatContext) AVInterleavedWriteFrame(packet *AVPacket, stream *AVStream) int {
+	if packet == nil || stream == nil {
+		return 0
+	}
+
+	C.av_packet_rescale_ts(packet.CAVPacket, packet.CTimebase, stream.CAVStream.time_base)
+	return int(C.av_interleaved_write_frame(ctx.CAVFormatContext, packet.CAVPacket))
 }

@@ -1,10 +1,5 @@
 package inputs
 
-//#cgo CFLAGS: -I/usr/include/x86_64-linux-gnu
-//#cgo LDFLAGS: -lavformat -lavcodec -lavutil
-//#include <libavformat/avformat.h>
-//#include <libavcodec/avcodec.h>
-import "C"
 import (
 	"fmt"
 	"log"
@@ -65,7 +60,6 @@ func (input *InputBase) CheckHasStreams(noVideoStreams, noAudioStreams int) erro
 // DumpInfo dumps the information about the input format.
 func (input *InputBase) DumpInfo() {
 	input.ctx.AVDumpFormat()
-	// C.av_dump_format(input.formatContext, 0, nil, 0)
 }
 
 // OpenInput opens an input based on the given input string.
@@ -95,6 +89,10 @@ func (input *InputBase) OpenInput(inStr string) error {
 	input.ctx = &ffmpeg.AVFormatContext{}
 	input.ctx.AVFormatAllocContext()
 
+	input.ctx.Version()
+
+	fmt.Printf("input.ctx: %v\n", input.ctx)
+
 	ret := input.ctx.AVFormatOpenInput(inStr)
 
 	if ret < 0 {
@@ -108,13 +106,21 @@ func (input *InputBase) OpenInput(inStr string) error {
 		return fmt.Errorf("could not find stream info")
 	}
 
-	for i := 0; i < input.ctx.GetNumberOfStreams(); i++ {
-		stream := input.ctx.GetStreams()[i]
-		codecType := stream.GetCodecType()
+	input.ctx.AVDumpFormat()
+	fmt.Printf("input.ctx.GetNumberOfStreams(): %v\n", input.ctx.GetNumberOfStreams())
 
-		if codecType == C.AVMEDIA_TYPE_VIDEO {
+	for i := 0; i < input.ctx.GetNumberOfStreams(); i++ {
+		stream := input.ctx.GetStream(i)
+		// stream := input.ctx.GetStreams()[i]
+
+		fmt.Printf("stream: %v\n", stream)
+
+		codecType := stream.GetCodecType()
+		fmt.Printf("codecType: %v\n", codecType)
+
+		if codecType == ffmpeg.AVMEDIA_TYPE_VIDEO {
 			input.videoStreams = append(input.videoStreams, stream)
-		} else if codecType == C.AVMEDIA_TYPE_AUDIO {
+		} else if codecType == ffmpeg.AVMEDIA_TYPE_AUDIO {
 			input.audioStreams = append(input.audioStreams, stream)
 		}
 	}

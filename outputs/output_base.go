@@ -1,11 +1,8 @@
 package outputs
 
-//#cgo CFLAGS: -I/usr/include/x86_64-linux-gnu
-//#cgo LDFLAGS: -lavformat -lavcodec -lavutil
-//#include <libavformat/avformat.h>
-//#include <libavcodec/avcodec.h>
-import "C"
 import (
+	"fmt"
+
 	"github.com/thomaskhub/meblo/ffmpeg"
 	"github.com/thomaskhub/meblo/logger"
 	"go.uber.org/zap"
@@ -42,24 +39,72 @@ func (output *OutputBase) Open(outStr string) {
 	output.ctx = &ffmpeg.AVFormatContext{}
 
 	//open ffmpeg output context 2
+	output.ctx.AVFormatAllocContext()
 	ret := output.ctx.AVFormatAllocOutputContext2(outStr)
 	if ret < 0 {
 		logger.Fatal("Output", zap.String("OutputFormatError", outStr))
 	}
 
 	//create the streams for video
-	for i, codecParams := range output.videoCodecParamsList {
-		output.videoOutputStreamList = append(output.videoOutputStreamList, output.ctx.AVFormatNewStream())
-		output.videoOutputStreamList[i].SetCodecParameters(codecParams)
-	}
+
+	fmt.Printf("output.videoCodecParamsList: %v\n", output.videoCodecParamsList[0].CAVCodecParameters)
 
 	for i, codecParams := range output.videoCodecParamsList {
 		output.videoOutputStreamList = append(output.videoOutputStreamList, output.ctx.AVFormatNewStream())
 		output.videoOutputStreamList[i].SetCodecParameters(codecParams)
+
+		fmt.Printf("codecParams: %v\n", codecParams)
+
+	}
+
+	for i, codecParams := range output.audioCodecParamsList {
+		output.audioOutputStreamList = append(output.audioOutputStreamList, output.ctx.AVFormatNewStream())
+		output.audioOutputStreamList[i].SetCodecParameters(codecParams)
+
 	}
 
 	output.ctx.CheckIfNoFile(outStr)
 	output.ctx.AVFormatWriteHeader()
+
+	//process audio packets
+	go func() {
+		for {
+			for i, out := range output.audioIn {
+				packet := <-out
+				fmt.Printf("packet: %v\n", packet)
+				stream := output.audioOutputStreamList[i]
+
+				// packet.PtsSwitchDts()
+				ret := output.ctx.AVInterleavedWriteFrame(packet, stream)
+				if ret < 0 {
+					logger.Fatal("Output Audio", zap.String("OutputWriteError", outStr))
+				}
+
+				packet.AVPacketUnref()
+			}
+		}
+	}()
+
+	// //process vide packets
+	go func() {
+		for {
+			for i, out := range output.videoIn {
+				packet := <-out
+
+				// fmt.Printf("packet.CAVPacket: %v %d\n", packet.CAVPacket, i)
+				stream := output.videoOutputStreamList[i]
+				// packet.PtsSwitchDts()
+
+				output.ctx.AVInterleavedWriteFrame(packet, stream)
+				if ret < 0 {
+					logger.Fatal("Output Video", zap.String("OutputWriteError", outStr))
+				}
+
+				packet.AVPacketUnref()
+			}
+		}
+	}()
+
 }
 
 func (output *OutputBase) Close() {

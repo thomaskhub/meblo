@@ -1,7 +1,6 @@
 package ffmpeg
 
-//#cgo CFLAGS: -I/usr/include/x86_64-linux-gnu
-//#cgo LDFLAGS: -lavformat -lavcodec -lavutil
+//#cgo pkg-config: libavformat libavfilter libavutil libavcodec
 //#include <libavformat/avformat.h>
 // #include <errno.h>
 import "C"
