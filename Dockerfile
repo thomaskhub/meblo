@@ -66,8 +66,13 @@ RUN git clone https://github.com/thomaskhub/FFmpeg.git ffmpeg-6.0 \
 
 RUN apt-get install libjansson-dev -y
 
-FROM base as dev
+# Install go module dependancies
+WORKDIR /go/src/meblo
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
 
+FROM base as dev
 RUN apt-get install -y gdb
 
 FROM base as prod
