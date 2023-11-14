@@ -11,17 +11,11 @@ services:
     working_dir: /go/src/meblo
     command: sleep 10000
 
-  build:    
+  test:
     build:
       context: .
       target: dev
-    volumes:
-      - .:/go/src/meblo
-    working_dir: /go/src/meblo
-    command: go build
-
-  test:
-    image: golang:latest
+    container_name: meblo-test
     volumes:
       - .:/go/src/meblo
     working_dir: /go/src/meblo
