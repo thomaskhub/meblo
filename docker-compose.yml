@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  sleep:
+    build:
+      context: .
+      target: dev
+    container_name: meblo-sleep
+    volumes:
+      - .:/go/src/meblo
+    working_dir: /go/src/meblo
+    command: sleep 10000
+
+  test:
+    build:
+      context: .
+      target: dev
+    container_name: meblo-test
+    volumes:
+      - .:/go/src/meblo
+    working_dir: /go/src/meblo
+    command: go test ./...
