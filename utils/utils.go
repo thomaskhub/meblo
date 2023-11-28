@@ -17,9 +17,9 @@ const (
 
 func IsFilePath(path string) bool {
 	// Regular expressions for Linux, Windows, and Mac file paths
-	linuxRegex := `^/.*$`
-	windowsRegex := `^[a-zA-Z]:\\.*$`
-	macRegex := `^/Volumes/.*$`
+	linuxRegex := `^\.*/`
+	windowsRegex := `^[a-zA-Z]:\\.*$` //TODO: not tested yet as we run only on linux
+	macRegex := `^/Volumes/.*$`       //TODO: not tested yet as we run only on linux
 
 	// Check if the string matches any of the regular expressions
 	isLinuxPath, _ := regexp.MatchString(linuxRegex, path)

@@ -1,160 +1,122 @@
 package inputs
 
-import "C"
 import (
-	"time"
+	"errors"
+	"fmt"
 
-	"github.com/thomaskhub/meblo/ffmpeg"
+	"github.com/thomaskhub/go-astiav"
 	"github.com/thomaskhub/meblo/logger"
 	"github.com/thomaskhub/meblo/utils"
 	"go.uber.org/zap"
 )
 
-type InputOptions struct {
-	AutoRetry bool //enable auto retry
-}
+const (
+	OUT_AUDIO_CH = 0
+	OUT_VIDEO_CH = 1
+)
 
 type Input struct {
-	base           InputBase
-	videoOut       chan *ffmpeg.AVPacket
-	audioOut       chan *ffmpeg.AVPacket
-	audioTimescale ffmpeg.Timescale
-	videoTimescale ffmpeg.Timescale
-	inStr          string //input string passed to open
-	Options        InputOptions
+	ctx *astiav.FormatContext
+
+	//Channels for the output
+	dataChannel utils.DataChannel
+
+	//Streams from the input file
+	videoStreams []*astiav.Stream
+	audioStreams []*astiav.Stream
+
+	//side band signals needed for the output if no encoder is used
+	metaData utils.MetaDataChannel
 }
 
-func (file *Input) GetVideoOut() chan *ffmpeg.AVPacket {
-	return file.videoOut
+func NewInputV2() *Input {
+	in := &Input{}
+	return in
 }
 
-func (file *Input) GetAudioOut() chan *ffmpeg.AVPacket {
-	return file.audioOut
-}
+func (in *Input) Open(url string, autoRetry bool) error {
 
-func (file *Input) GetVideoCodecParams() ffmpeg.AVCodecParameters {
-	return file.base.GetVideoCodecParams()
-}
+	in.ctx = astiav.AllocFormatContext()
 
-func (file *Input) GetAudioCodecParams() ffmpeg.AVCodecParameters {
-	return file.base.GetAudioCodecParams()
-}
-
-// Close closes the input file.
-//
-// There are no parameters.
-// It does not return anything.
-func (file *Input) Close() {
-	// Close the input format context
-	file.base.ctx.AVFormatCloseInput()
-	// C.avformat_close_input(&file.base.ctx.C)
-
-	// Free the format context
-	file.base.ctx.AVFormatFreeContext()
-
-	// C.avformat_free_context(file.base.ctx)
-
-	// Clear the video streams and audio streams
-	file.base.videoStreams = nil
-	file.base.audioStreams = nil
-
-	// Close the video output channel
-	close(file.videoOut)
-
-	// Close the audio output channel
-	close(file.audioOut)
-}
-func (file *Input) Open(inStr string, autoRetry bool) error {
-	file.inStr = inStr
-	file.Options = InputOptions{
-		AutoRetry: autoRetry,
-	}
-	file.base = InputBase{}
-	file.base.OpenInput(inStr)
-
-	//check if we have the specified number of video streams and audio streams
-	//we only take the first audio and first video stream in the file
-	err := file.base.CheckHasStreams(1, 1)
-
+	err := in.ctx.OpenInput(url, nil, nil)
 	if err != nil {
-		logger.Error("FileInput", zap.String("StramCheck", "failed"))
+		logger.Fatal("could not open input")
+	}
+
+	for _, stream := range in.ctx.Streams() {
+		if stream.CodecParameters().CodecType() == astiav.MediaTypeVideo {
+			in.videoStreams = append(in.videoStreams, stream)
+		} else if stream.CodecParameters().CodecType() == astiav.MediaTypeAudio {
+			in.audioStreams = append(in.audioStreams, stream)
+		}
+	}
+
+	err = in.CheckHasStreams(1, 1)
+	if err != nil {
+		logger.Error("FileInput", zap.String("StreamCheck", "failed"))
 		return err
 	}
 
-	file.videoTimescale = file.base.videoStreams[0].GetTimebase()
-	file.audioTimescale = file.base.audioStreams[0].GetTimebase()
+	in.dataChannel = make(utils.DataChannel)
+	in.dataChannel[OUT_VIDEO_CH] = make(chan *astiav.Packet, 16)
+	in.dataChannel[OUT_AUDIO_CH] = make(chan *astiav.Packet, 16)
 
-	file.videoOut = make(chan *ffmpeg.AVPacket, 16)
-	file.audioOut = make(chan *ffmpeg.AVPacket, 16)
+	in.metaData = make(utils.MetaDataChannel)
 
-	//create a loop in a go routine that will read the input data until file is close and
-	//write the data to the videoOut and audioOut channels
-	go func() {
+	in.metaData[OUT_VIDEO_CH] = utils.MetaData{
+		TimeBase: in.videoStreams[0].TimeBase(),
+		CodecPar: in.videoStreams[0].CodecParameters(),
+	}
 
-		for {
-			// Read the input data until the file is closed
-			// and write the data to the videoOut and audioOut channels
-			err := file.readPacket()
-			if err == utils.FFmpegErrorEinval {
-				logger.Fatal("could not read packet. abort")
-			} else if err == utils.FFmpegErrorEof {
-				logger.Debug("reached the end of the file")
-				if file.Options.AutoRetry {
-					err := file.restart()
-					if err != nil {
-						logger.Error("Input:", zap.String("ReadPacketError", "could not restart the file. abort"))
-					}
-				}
-				return
-			} else {
-				continue
-			}
+	in.metaData[OUT_AUDIO_CH] = utils.MetaData{
+		TimeBase: in.audioStreams[0].TimeBase(),
+		CodecPar: in.audioStreams[0].CodecParameters(),
+	}
 
-		}
-	}()
 	return nil
 }
 
-// readPacket reads a packet from the AVFormatContext.
-//
-// Parameters:
-//
-//	formatContext - a pointer to an AVFormatContext
-//
-// Returns:
-//
-//	packet - a pointer to an AVPacket
-//	error - an error object
-func (file *Input) readPacket() int {
-	packet := ffmpeg.AVPacket{}
-	packet.AVPacketAllocate()
-
-	ret := file.base.ctx.AVReadFrame(&packet)
-	if ret < 0 {
-		packet.AVPacketFree()
-		return int(ret)
+func (in *Input) CheckHasStreams(noVideoStreams, noAudioStreams int) error {
+	//check if we have the specified number of video streams and audio streams, if not return an error otherwise return nil
+	if len(in.videoStreams) < int(noVideoStreams) || len(in.audioStreams) < int(noAudioStreams) {
+		//also print the values of the streams
+		logger.Debug("CheckStreams: ", zap.Int("No Video Streams", len(in.videoStreams)))
+		logger.Debug("CheckStreams: ", zap.Int("No Audio Streams", len(in.audioStreams)))
+		return fmt.Errorf("number of video or audio streams does not match the specified count")
 	}
-
-	if packet.GetStreamIndex() == file.base.videoStreams[0].GetStreamIndex() {
-		packet.SetTimebase(file.base.videoStreams[0].GetTimebase())
-		file.videoOut <- &packet
-		logger.Debug("FileInput", zap.String("VideoPacket", "written"))
-
-	} else if packet.GetStreamIndex() == file.base.audioStreams[0].GetStreamIndex() {
-		packet.SetTimebase(file.base.audioStreams[0].GetTimebase())
-		file.audioOut <- &packet
-		logger.Debug("FileInput", zap.String("AudioPacket", "written"))
-	}
-
-	return 0
+	return nil
 }
 
-// Restart restarts the input file with a new string.
-//
-// Parameters:
-//   - inStr: the new input string
-func (file *Input) restart() error {
-	file.Close()
-	time.Sleep(4 * time.Second)
-	return file.Open(file.inStr, file.Options.AutoRetry)
+func (in *Input) Run() {
+	go func() {
+
+		for {
+			packet := astiav.AllocPacket()
+			err := in.ctx.ReadFrame(packet)
+			if err != nil {
+				if errors.Is(err, astiav.ErrEof) {
+					break
+				}
+				logger.Fatal("could not read frame")
+			}
+
+			if packet.StreamIndex() == in.videoStreams[0].Index() {
+				in.dataChannel[OUT_VIDEO_CH] <- packet
+			} else if packet.StreamIndex() == in.audioStreams[0].Index() {
+				in.dataChannel[OUT_AUDIO_CH] <- packet
+			}
+		}
+	}()
+}
+
+func (in *Input) Close() {
+	in.ctx.CloseInput()
+}
+
+func (in *Input) GetDataChannel() *utils.DataChannel {
+	return &in.dataChannel
+}
+
+func (in *Input) GetMetaData() map[int]utils.MetaData {
+	return in.metaData
 }
