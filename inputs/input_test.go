@@ -18,7 +18,7 @@ func TestFileInput(t *testing.T) {
 	wd, _ := utils.GetCurrentWorkingDir()
 	absPath := utils.ConvertToAbsolutePath("../assets/test/test.mp4", wd)
 
-	fileInput := NewInputV2()
+	fileInput := NewInput()
 	err := fileInput.Open(absPath, true)
 
 	if err != nil {
@@ -37,10 +37,8 @@ func TestFileInput(t *testing.T) {
 			packet := <-(*dataChannel)[OUT_VIDEO_CH]
 			den := meta[OUT_VIDEO_CH].TimeBase.Den()
 
-			if packet != nil {
-				videoSum += float64(int(packet.Duration())) / float64(den)
-				logger.Debug("VideoPacket", zap.Float64("durationSum", videoSum))
-			}
+			videoSum += float64(int(packet.Duration())) / float64(den)
+			logger.Debug("VideoPacket", zap.Float64("durationSum", videoSum))
 
 			packet.Free()
 		}
@@ -52,10 +50,9 @@ func TestFileInput(t *testing.T) {
 		for {
 			packet := <-(*dataChannel)[OUT_AUDIO_CH]
 			den := meta[OUT_AUDIO_CH].TimeBase.Den()
-			if packet != nil {
-				audioSum += float64(int(packet.Duration())) / float64(den)
-				logger.Debug("AudioPacket", zap.Float64("durationSum", audioSum))
-			}
+
+			audioSum += float64(int(packet.Duration())) / float64(den)
+			logger.Debug("AudioPacket", zap.Float64("durationSum", audioSum))
 
 			packet.Free()
 		}

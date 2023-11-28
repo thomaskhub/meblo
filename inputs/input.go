@@ -29,7 +29,7 @@ type Input struct {
 	metaData utils.MetaDataChannel
 }
 
-func NewInputV2() *Input {
+func NewInput() *Input {
 	in := &Input{}
 	return in
 }
@@ -58,14 +58,15 @@ func (in *Input) Open(url string, autoRetry bool) error {
 	}
 
 	in.dataChannel = make(utils.DataChannel)
-	in.dataChannel[OUT_VIDEO_CH] = make(chan *astiav.Packet, 16)
-	in.dataChannel[OUT_AUDIO_CH] = make(chan *astiav.Packet, 16)
+	in.dataChannel[OUT_VIDEO_CH] = make(chan astiav.Packet, 16)
+	in.dataChannel[OUT_AUDIO_CH] = make(chan astiav.Packet, 16)
 
 	in.metaData = make(utils.MetaDataChannel)
 
 	in.metaData[OUT_VIDEO_CH] = utils.MetaData{
-		TimeBase: in.videoStreams[0].TimeBase(),
-		CodecPar: in.videoStreams[0].CodecParameters(),
+		TimeBase:  in.videoStreams[0].TimeBase(),
+		CodecPar:  in.videoStreams[0].CodecParameters(),
+		FrameRate: in.ctx.GuessFrameRate(in.videoStreams[0], nil),
 	}
 
 	in.metaData[OUT_AUDIO_CH] = utils.MetaData{
@@ -101,9 +102,9 @@ func (in *Input) Run() {
 			}
 
 			if packet.StreamIndex() == in.videoStreams[0].Index() {
-				in.dataChannel[OUT_VIDEO_CH] <- packet
+				in.dataChannel[OUT_VIDEO_CH] <- *packet
 			} else if packet.StreamIndex() == in.audioStreams[0].Index() {
-				in.dataChannel[OUT_AUDIO_CH] <- packet
+				in.dataChannel[OUT_AUDIO_CH] <- *packet
 			}
 		}
 	}()

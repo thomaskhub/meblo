@@ -15,7 +15,7 @@ func main() {
 	logger.InitLogger(zapcore.ErrorLevel)
 
 	//read the input
-	in := inputs.NewInputV2()
+	in := inputs.NewInput()
 	// defer in.Close()
 	fmt.Println(os.Getwd())
 	err := in.Open("../../assets/test/test.mp4", false)

@@ -11,8 +11,8 @@ import (
 type Output struct {
 	ctx         *astiav.FormatContext
 	dataChannel *utils.DataChannel
-	outStream   map[int]*astiav.Stream
 	metaData    utils.MetaDataChannel
+	outStream   map[int]*astiav.Stream
 	outStr      string
 }
 
@@ -49,7 +49,6 @@ func (output *Output) WriteInterleavedFrame(idx int, packet *astiav.Packet) {
 	inTimeBase := output.metaData[idx].TimeBase
 
 	packet.RescaleTs(inTimeBase, outTimeBase)
-	// packet.SetPos(-1) --> this we never used in the past is this needed?
 
 	if err := output.ctx.WriteInterleavedFrame(packet); err != nil {
 		logger.Fatal("Output", zap.String("OutputWriteError", output.outStr))
@@ -91,8 +90,9 @@ func (output *Output) Open(outStr string) {
 				select {
 
 				case packet := <-pktCh:
-					output.WriteInterleavedFrame(i, packet)
-					packet.Unref()
+
+					output.WriteInterleavedFrame(i, &packet)
+					// packet.Unref()
 
 				default:
 					// No more audio packets currently available
