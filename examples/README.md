@@ -2,7 +2,7 @@
 
 ## Remuxing
 
-Takes in input videofrom the assets directory and writes it to disk as mpeg ts
+Takes in input video from the assets directory and writes it to disk as mpeg ts
 under `/tmp/oranges.ts`
 
 ```bash

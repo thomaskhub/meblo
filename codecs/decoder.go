@@ -38,7 +38,7 @@ func (e *Decoder) GetMetaData() utils.MetaData {
 	return e.metaDataOut
 }
 
-func (e *Decoder) Open() error {
+func (e *Decoder) Open() {
 
 	e.codec = astiav.FindDecoder(e.metaData.CodecPar.CodecID())
 	if e.codec == nil {
@@ -68,7 +68,6 @@ func (e *Decoder) Open() error {
 	e.metaDataOut.FrameRate = e.metaData.FrameRate
 	e.metaDataOut.SampleRate = e.metaData.SampleRate
 
-	return nil
 }
 
 func (e *Decoder) Run() {
