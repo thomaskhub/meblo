@@ -70,19 +70,16 @@ func (in *Input) Open(url string, autoRetry bool) error {
 	}
 
 	in.metaData[OUT_AUDIO_CH] = utils.MetaData{
-		TimeBase: in.audioStreams[0].TimeBase(),
-		CodecPar: in.audioStreams[0].CodecParameters(),
+		TimeBase:   in.audioStreams[0].TimeBase(),
+		CodecPar:   in.audioStreams[0].CodecParameters(),
+		SampleRate: in.audioStreams[0].CodecParameters().SampleRate(),
 	}
 
 	return nil
 }
 
 func (in *Input) CheckHasStreams(noVideoStreams, noAudioStreams int) error {
-	//check if we have the specified number of video streams and audio streams, if not return an error otherwise return nil
 	if len(in.videoStreams) < int(noVideoStreams) || len(in.audioStreams) < int(noAudioStreams) {
-		//also print the values of the streams
-		logger.Debug("CheckStreams: ", zap.Int("No Video Streams", len(in.videoStreams)))
-		logger.Debug("CheckStreams: ", zap.Int("No Audio Streams", len(in.audioStreams)))
 		return fmt.Errorf("number of video or audio streams does not match the specified count")
 	}
 	return nil
@@ -102,10 +99,11 @@ func (in *Input) Run() {
 			}
 
 			if packet.StreamIndex() == in.videoStreams[0].Index() {
-				in.dataChannel[OUT_VIDEO_CH] <- *packet
+				in.dataChannel[OUT_VIDEO_CH] <- *packet.Clone()
 			} else if packet.StreamIndex() == in.audioStreams[0].Index() {
-				in.dataChannel[OUT_AUDIO_CH] <- *packet
+				in.dataChannel[OUT_AUDIO_CH] <- *packet.Clone()
 			}
+			packet.Free()
 		}
 	}()
 }

@@ -9,10 +9,11 @@ const (
 )
 
 type MetaData struct {
-	TimeBase  astiav.Rational
-	CodecPar  *astiav.CodecParameters
-	FrameRate astiav.Rational
-	DecCtx    *astiav.CodecContext
+	TimeBase   astiav.Rational
+	CodecPar   *astiav.CodecParameters
+	FrameRate  astiav.Rational
+	SampleRate int
+	// DecCtx    *astiav.CodecContext
 }
 
 type MetaDataChannel map[int]MetaData

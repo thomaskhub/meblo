@@ -1,6 +1,8 @@
 package outputs
 
 import (
+	"time"
+
 	"github.com/thomaskhub/go-astiav"
 
 	"github.com/thomaskhub/meblo/logger"
@@ -10,7 +12,7 @@ import (
 
 type Output struct {
 	ctx         *astiav.FormatContext
-	dataChannel *utils.DataChannel
+	dataChannel utils.DataChannel
 	metaData    utils.MetaDataChannel
 	outStream   map[int]*astiav.Stream
 	outStr      string
@@ -25,7 +27,7 @@ func (output *Output) SetMetaData(metaData utils.MetaDataChannel) {
 }
 
 func (output *Output) SetDataChannel(dataChannel utils.DataChannel) {
-	output.dataChannel = &dataChannel
+	output.dataChannel = dataChannel
 }
 
 func (output *Output) CheckIfNoFile() *astiav.IOContext {
@@ -47,7 +49,6 @@ func (output *Output) WriteInterleavedFrame(idx int, packet *astiav.Packet) {
 
 	outTimeBase := output.outStream[idx].TimeBase()
 	inTimeBase := output.metaData[idx].TimeBase
-
 	packet.RescaleTs(inTimeBase, outTimeBase)
 
 	if err := output.ctx.WriteInterleavedFrame(packet); err != nil {
@@ -86,16 +87,24 @@ func (output *Output) Open(outStr string) {
 	//so thats why output audio and video processing is done in one go routine
 	go func() {
 		for {
-			for i, pktCh := range *output.dataChannel {
+			for i, pktCh := range output.dataChannel {
+				// fmt.Printf("i: %v\n", i)
+				// packet := <-pktCh
+				// fmt.Printf("after i: %v\n", i)
+				// output.WriteInterleavedFrame(i, &packet)
+				// packet.SetStreamIndex(i)
 				select {
 
 				case packet := <-pktCh:
+					packet.SetStreamIndex(i)
 
 					output.WriteInterleavedFrame(i, &packet)
-					// packet.Unref()
+					packet.Unref()
 
 				default:
-					// No more audio packets currently available
+
+					time.Sleep(10 * time.Millisecond)
+					// 	// No more audio packets currently available
 				}
 			}
 
