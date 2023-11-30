@@ -39,6 +39,7 @@ func main() {
 	//setup the input
 	in := inputs.NewInput()
 	err = in.Open("../../assets/test/test.mp4", false)
+	// err = in.Open("rtmp://localhost:1935/live/test", false)
 	if err != nil {
 		panic(err)
 	}

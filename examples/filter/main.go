@@ -114,7 +114,6 @@ func main() {
 			time.Sleep(time.Second * 3)
 			stats := videoEncoder.GetStats()
 			fmt.Printf("---Stats---\nSpeed: %f \nFps: %f\n\n", stats.Speed, stats.Fps)
-
 		}
 	}()
 

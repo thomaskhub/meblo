@@ -37,10 +37,14 @@ func NewInput() *Input {
 func (in *Input) Open(url string, autoRetry bool) error {
 
 	in.ctx = astiav.AllocFormatContext()
-
-	err := in.ctx.OpenInput(url, nil, nil)
+	err := in.ctx.OpenInput(url, astiav.FindInputFormat("flv"), nil)
 	if err != nil {
 		logger.Fatal("could not open input")
+	}
+
+	err = in.ctx.FindStreamInfo(nil)
+	if err != nil {
+		logger.Fatal("could not find stream info")
 	}
 
 	for _, stream := range in.ctx.Streams() {
@@ -79,6 +83,8 @@ func (in *Input) Open(url string, autoRetry bool) error {
 }
 
 func (in *Input) CheckHasStreams(noVideoStreams, noAudioStreams int) error {
+	fmt.Printf("noVideoStreams: %v\n", in.videoStreams)
+	fmt.Printf("noAudioStreams: %v\n", in.audioStreams)
 	if len(in.videoStreams) < int(noVideoStreams) || len(in.audioStreams) < int(noAudioStreams) {
 		return fmt.Errorf("number of video or audio streams does not match the specified count")
 	}
