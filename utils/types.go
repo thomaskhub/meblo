@@ -13,7 +13,13 @@ type MetaData struct {
 	CodecPar   *astiav.CodecParameters
 	FrameRate  astiav.Rational
 	SampleRate int
-	// DecCtx    *astiav.CodecContext
+}
+
+type Chunk struct {
+	VideoFrame    astiav.Frame
+	AudioFrame    astiav.Frame
+	AudioCodecPar *astiav.CodecParameters
+	VideoCodecPar *astiav.CodecParameters
 }
 
 type MetaDataChannel map[int]MetaData

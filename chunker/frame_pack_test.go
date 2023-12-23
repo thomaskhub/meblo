@@ -40,7 +40,7 @@ func TestFramePack(t *testing.T) {
 	f1.AllocBuffer(0)
 	f1.SetPts(1234)
 
-	pack := chunker.NewFramePack(0, nil)
+	pack := chunker.NewFramePack(0)
 	for i := 0; i < 4; i++ {
 		SetFrameData(t, f1, 1024*i)
 		pack.PushFrame(f1)
@@ -63,7 +63,7 @@ func TestFramePack(t *testing.T) {
 				require.Equal(t, uint32(i+k*1764), val)
 			}
 
-			require.Equal(t, chunk.Pts(), int64(0+k*40000))
+			require.Equal(t, chunk.Pts(), int64(0+k*chunker.PTS_OFFSET_40_MS))
 			chunkList = append(chunkList, chunk)
 		default:
 			done = true
@@ -72,7 +72,7 @@ func TestFramePack(t *testing.T) {
 		k++
 	}
 
-	unpack := chunker.NewFrameUnPack(0, nil)
+	unpack := chunker.NewFrameUnPack(0)
 
 	for _, chunk := range chunkList {
 		unpack.PushFrame(&chunk)

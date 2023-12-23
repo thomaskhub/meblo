@@ -72,7 +72,6 @@ func (e *Decoder) Open() {
 
 func (e *Decoder) Run() {
 	go func() {
-		i := 0
 		for {
 
 			packet := <-e.dataChannel
@@ -89,14 +88,6 @@ func (e *Decoder) Run() {
 					continue
 				}
 				logger.Fatal("could not receive frame")
-			}
-
-			// fmt.Printf("e.decFrame.Pts(%d): %v\n", i, e.decFrame.Pts())
-
-			i++
-
-			if i == 3000 {
-				logger.Fatal("stop")
 			}
 
 			//when we com here we can push the frame to the output
