@@ -3,6 +3,7 @@ package inputs
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/thomaskhub/go-astiav"
 	"github.com/thomaskhub/meblo/logger"
@@ -27,17 +28,22 @@ type Input struct {
 
 	//side band signals needed for the output if no encoder is used
 	metaData utils.MetaDataChannel
+	stop     chan bool
+	wg       sync.WaitGroup
 }
 
 func NewInput() *Input {
 	in := &Input{}
+	in.wg.Add(1)
+	in.stop = make(chan bool)
 	return in
 }
 
 func (in *Input) Open(url string, autoRetry bool) error {
 
 	in.ctx = astiav.AllocFormatContext()
-	err := in.ctx.OpenInput(url, astiav.FindInputFormat("flv"), nil)
+	// err := in.ctx.OpenInput(url, astiav.FindInputFormat("flv"), nil)
+	err := in.ctx.OpenInput(url, nil, nil)
 	if err != nil {
 		logger.Fatal("could not open input")
 	}
@@ -48,6 +54,7 @@ func (in *Input) Open(url string, autoRetry bool) error {
 	}
 
 	for _, stream := range in.ctx.Streams() {
+		fmt.Printf("stream: %v\n", stream)
 		if stream.CodecParameters().CodecType() == astiav.MediaTypeVideo {
 			in.videoStreams = append(in.videoStreams, stream)
 		} else if stream.CodecParameters().CodecType() == astiav.MediaTypeAudio {
@@ -82,10 +89,8 @@ func (in *Input) Open(url string, autoRetry bool) error {
 	return nil
 }
 
-func (in *Input) CheckHasStreams(noVideoStreams, noAudioStreams int) error {
-	fmt.Printf("noVideoStreams: %v\n", in.videoStreams)
-	fmt.Printf("noAudioStreams: %v\n", in.audioStreams)
-	if len(in.videoStreams) < int(noVideoStreams) || len(in.audioStreams) < int(noAudioStreams) {
+func (in *Input) CheckHasStreams(numberVideoStreams, numberAudioStreams int) error {
+	if len(in.videoStreams) < int(numberVideoStreams) || len(in.audioStreams) < int(numberAudioStreams) {
 		return fmt.Errorf("number of video or audio streams does not match the specified count")
 	}
 	return nil
@@ -93,28 +98,37 @@ func (in *Input) CheckHasStreams(noVideoStreams, noAudioStreams int) error {
 
 func (in *Input) Run() {
 	go func() {
-
+		defer in.wg.Done()
 		for {
-			packet := astiav.AllocPacket()
-			err := in.ctx.ReadFrame(packet)
-			if err != nil {
-				if errors.Is(err, astiav.ErrEof) {
-					break
-				}
-				logger.Fatal("could not read frame")
-			}
+			select {
+			case <-in.stop:
+				return
 
-			if packet.StreamIndex() == in.videoStreams[0].Index() {
-				in.dataChannel[OUT_VIDEO_CH] <- *packet.Clone()
-			} else if packet.StreamIndex() == in.audioStreams[0].Index() {
-				in.dataChannel[OUT_AUDIO_CH] <- *packet.Clone()
+			default:
+
+				packet := astiav.AllocPacket()
+				err := in.ctx.ReadFrame(packet)
+				if err != nil {
+					if errors.Is(err, astiav.ErrEof) {
+						break
+					}
+					logger.Fatal("could not read frame")
+				}
+
+				if packet.StreamIndex() == in.videoStreams[0].Index() {
+					in.dataChannel[OUT_VIDEO_CH] <- *packet.Clone()
+				} else if packet.StreamIndex() == in.audioStreams[0].Index() {
+					in.dataChannel[OUT_AUDIO_CH] <- *packet.Clone()
+				}
+				packet.Free()
 			}
-			packet.Free()
 		}
 	}()
 }
 
 func (in *Input) Close() {
+	in.stop <- true
+	in.wg.Wait()
 	in.ctx.CloseInput()
 }
 

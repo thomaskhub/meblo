@@ -2,6 +2,7 @@ package codecs
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/thomaskhub/go-astiav"
 	"github.com/thomaskhub/meblo/logger"
@@ -16,10 +17,16 @@ type Decoder struct {
 	metaData       utils.MetaData
 	dataChannelOut chan astiav.Frame
 	metaDataOut    utils.MetaData
+	stop           chan bool
+	wg             sync.WaitGroup
 }
 
 func NewDecoder() *Decoder {
-	return &Decoder{}
+	dec := &Decoder{
+		stop: make(chan bool),
+	}
+	dec.wg.Add(1)
+	return dec
 }
 
 func (e *Decoder) SetMetaData(metaData utils.MetaData) {
@@ -36,6 +43,12 @@ func (e *Decoder) GetDataChannel() chan astiav.Frame {
 
 func (e *Decoder) GetMetaData() utils.MetaData {
 	return e.metaDataOut
+}
+
+func (e *Decoder) Free() {
+	e.stop <- true
+	e.wg.Wait()
+	e.ctx.Free()
 }
 
 func (e *Decoder) Open() {
@@ -72,28 +85,33 @@ func (e *Decoder) Open() {
 
 func (e *Decoder) Run() {
 	go func() {
+		defer e.wg.Done()
 		for {
+			select {
+			case <-e.stop:
+				return
+			default:
 
-			packet := <-e.dataChannel
-			err := e.ctx.SendPacket(&packet)
-			if err != nil {
-				logger.Fatal("could not send packet")
-			}
-			packet.Unref()
-			packet.Free()
-
-			err = e.ctx.ReceiveFrame(e.decFrame)
-			if err != nil {
-				if errors.Is(err, astiav.ErrEof) || errors.Is(err, astiav.ErrEagain) {
-					continue
+				packet := <-e.dataChannel
+				err := e.ctx.SendPacket(&packet)
+				if err != nil {
+					logger.Fatal("could not send packet")
 				}
-				logger.Fatal("could not receive frame")
+				packet.Unref()
+				packet.Free()
+
+				err = e.ctx.ReceiveFrame(e.decFrame)
+				if err != nil {
+					if errors.Is(err, astiav.ErrEof) || errors.Is(err, astiav.ErrEagain) {
+						continue
+					}
+					logger.Fatal("could not receive frame")
+				}
+
+				//when we com here we can push the frame to the output
+				e.dataChannelOut <- *e.decFrame.Clone() //TODO: having clone here make things work !!!!
+				e.decFrame.Unref()
 			}
-
-			//when we com here we can push the frame to the output
-			e.dataChannelOut <- *e.decFrame.Clone() //TODO: having clone here make things work !!!!
-			e.decFrame.Unref()
-
 		}
 	}()
 }
